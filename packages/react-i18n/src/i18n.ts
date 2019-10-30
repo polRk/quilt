@@ -205,8 +205,8 @@ export class I18n {
 
   translationKeyExists(id: string) {
     try {
-      this.translate(id);
-      return true;
+      getTranslationTree(id, this.translations, this.locale)
+      return true
     } catch (error) {
       return false;
     }
