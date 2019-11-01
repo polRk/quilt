@@ -7,7 +7,7 @@ module.exports = {
     'plugin:shopify/prettier',
   ],
   parserOptions: {
-    project: 'tsconfig.json',
+    project: 'packages/tsconfig.json',
   },
   rules: {
     'jest/valid-expect-in-promise': 'off',

@@ -70,7 +70,7 @@
     {"path": "./semaphore"},
     {"path": "./sewing-kit-koa"},
     {"path": "./statsd"},
-    {"path": "./useful-types"}
+    {"path": "./useful-types"},
     {"path": "./web-worker"},
     {"path": "./with-env"}
   ]
