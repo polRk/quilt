@@ -1274,6 +1274,11 @@
   resolved "https://registry.yarnpkg.com/@types/eslint-visitor-keys/-/eslint-visitor-keys-1.0.0.tgz#1ee30d79544ca84d68d4b3cdb0af4f205663dd2d"
   integrity sha512-OCutwjDZ4aFS6PB1UZ988C4YgwlBHJd6wCeQqaLdmadZ/7e+w79+hbMUFC1QXDNCmdyoRfAFdm0RypzwR+Qpag==
 
+"@types/estree@^0.0.39":
+  version "0.0.39"
+  resolved "https://registry.yarnpkg.com/@types/estree/-/estree-0.0.39.tgz#e177e699ee1b8c22d23174caaa7422644389509f"
+  integrity sha512-EYNwp3bU+98cpU4lAWYYL7Zz+2gryWH1qbdDTidVd6hkiR6weksdbMadyXKXNPEkQFhXM+hVO9ZygomHXp+AIw==
+
 "@types/events@*":
   version "3.0.0"
   resolved "https://registry.yarnpkg.com/@types/events/-/events-3.0.0.tgz#2862f3f58a9a7f7c3e78d79f130dd4d71c25c2a7"
@@ -11025,6 +11030,13 @@ webpack-virtual-modules@^0.1.12:
   version "0.1.12"
   resolved "https://registry.yarnpkg.com/webpack-virtual-modules/-/webpack-virtual-modules-0.1.12.tgz#ff6430c1d6f514eff12bae773ec03e5043a81943"
   integrity sha512-uwVhcpmh7WykpP2fD4T//5DLdMuanPHGXQHCnIrKoRg10GgVNy5z2oAcn26HLF67a6HCSzgc9xar+SMtZhOnXw==
+  dependencies:
+    debug "^3.0.0"
+
+webpack-virtual-modules@^0.2.0:
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/webpack-virtual-modules/-/webpack-virtual-modules-0.2.0.tgz#dd13e089898ee14a77717d37a9848b40a9b1068b"
+  integrity sha512-Leo4r6Sjj0HkoeP9vtQzm1abUm6UJc6gK1KrqNakIer+03mCyFVivGOFy0I0NFpRrv+kQm3UKstjWg0Fe+JqUQ==
   dependencies:
     debug "^3.0.0"
 
