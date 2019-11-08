@@ -4,7 +4,7 @@ import webpack from 'webpack';
 import {camelCase} from 'change-case';
 import VirtualModulesPlugin from 'webpack-virtual-modules';
 import ParserHelpers from 'webpack/lib/ParserHelpers';
-import {CallExpression, Expression, SpreadElement} from 'estree';
+import {CallExpression} from 'estree';
 
 import {FindI18nImportPlugin} from './find-i18n-imports-plugin';
 import {generateID} from './utilities';
@@ -23,7 +23,9 @@ export class ReactI18nPlugin {
     fallbackLocale: 'en',
   };
 
-  constructor(options: Options) {
+  private virtualModules = new VirtualModulesPlugin();
+
+  constructor(options: Partial<Options> = {}) {
     this.options = {
       ...this.defaultOptions,
       ...options,
@@ -31,17 +33,11 @@ export class ReactI18nPlugin {
   }
 
   apply(compiler: webpack.Compiler) {
-    const virtualModules = new VirtualModulesPlugin();
-    virtualModules.apply(compiler);
+    this.virtualModules.apply(compiler);
 
-    compiler.hooks.compilation.tap(
+    compiler.hooks.normalModuleFactory.tap(
       PLUGIN_NAME,
-      (
-        compilation: webpack.compilation.Compilation,
-        {
-          normalModuleFactory,
-        }: {normalModuleFactory: webpack.compilation.NormalModuleFactory},
-      ) => {
+      (normalModuleFactory: webpack.compilation.NormalModuleFactory) => {
         const handler = (parser: any) => {
           new FindI18nImportPlugin().apply(parser);
 
@@ -50,8 +46,7 @@ export class ReactI18nPlugin {
             .for('CallExpression')
             .tap(PLUGIN_NAME, (originalExpression: CallExpression) => {
               if (
-                parser.state.module.resource.indexOf('node_modules') !== -1 &&
-                !parser.state.module.resource.endsWith('tsx') &&
+                parser.state.module.resource.indexOf('node_modules') !== -1 ||
                 !parser.state.i18nImports
               ) {
                 return;
@@ -59,37 +54,40 @@ export class ReactI18nPlugin {
 
               const componentPath = parser.state.module.resource;
               const componentDir = parser.state.module.context;
-              const identifierName = parser.state.i18nImports.get(
-                componentPath,
-              );
+              const importMap = parser.state.i18nImports.get(componentPath);
 
               if (
-                !identifierName ||
+                !importMap ||
                 originalExpression.callee.type !== 'Identifier'
               ) {
                 return;
               }
 
-              let expression: CallExpression | null = null;
-              if (originalExpression.callee.name === 'compose') {
-                const foundExpressions: Array<
-                  Expression | SpreadElement
-                > = originalExpression.arguments.filter(
-                  node =>
-                    node.type === 'CallExpression' &&
-                    node.callee.type === 'Identifier' &&
-                    node.callee.name === identifierName,
-                );
+              const expressions: CallExpression[] = [];
 
-                if (foundExpressions.length > 0) {
-                  expression = foundExpressions[0] as CallExpression;
-                }
-              } else if (originalExpression.callee.name === identifierName) {
-                expression = originalExpression;
+              if (
+                originalExpression.callee.name ===
+                  importMap.get(originalExpression.callee.name) &&
+                originalExpression.arguments.length === 0
+              ) {
+                expressions.push(originalExpression);
+              } else if (originalExpression.callee.name === 'compose') {
+                originalExpression.arguments.map(node => {
+                  if (
+                    node.type === 'CallExpression' &&
+                    node.callee.type === 'Identifier'
+                  ) {
+                    const identifierName = importMap.get(node.callee.name);
+
+                    if (identifierName && node.arguments.length === 0) {
+                      expressions.push(node);
+                    }
+                  }
+                });
               }
 
               // skip calls where consumer manually added arguments
-              if (!expression || expression.arguments.length > 0) {
+              if (expressions.length === 0) {
                 return;
               }
 
@@ -97,69 +95,51 @@ export class ReactI18nPlugin {
               if (translationFiles.length === 0) {
                 return;
               }
-
-              // check if fall back exist
-              const fallBackExist = translationFiles.find(
-                translationFile =>
-                  translationFile === `${this.options.fallbackLocale}.json`,
-              );
-
-              const fallBackFileRelativePath = path.join(
-                './',
-                TRANSLATION_DIRECTORY_NAME,
+              const fallBackExist = translationFiles.includes(
                 `${this.options.fallbackLocale}.json`,
               );
 
-              if (!fallBackExist) {
-                compilation.errors.push(
-                  `${componentPath}\n` +
-                    `${identifierName} 's arguments was not automatically filled in because` +
-                    `fallback translation file was not found at ${fallBackFileRelativePath} \n`,
+              let fallbackLocaleID;
+              if (fallBackExist) {
+                // Add a top-level fallbackLocale import
+                fallbackLocaleID = `__webpack__i18n__${generateID(
+                  camelCase(this.options.fallbackLocale),
+                )}`;
+
+                const fallBackFileRelativePath = path.join(
+                  './',
+                  TRANSLATION_DIRECTORY_NAME,
+                  `${this.options.fallbackLocale}.json`,
                 );
-                return;
+
+                const fallbackFileExpression = ParserHelpers.requireFileAsExpression(
+                  componentDir,
+                  path.join(componentDir, fallBackFileRelativePath),
+                );
+                ParserHelpers.addParsedVariableToModule(
+                  parser,
+                  fallbackLocaleID,
+                  fallbackFileExpression,
+                );
               }
 
-              // Add a top-level fallbackLocale import
-              const fallbackLocaleID = camelCase(this.options.fallbackLocale);
-
-              const fallbackFileExpression = ParserHelpers.requireFileAsExpression(
-                componentDir,
-                path.join(componentDir, fallBackFileRelativePath),
-              );
-              ParserHelpers.addParsedVariableToModule(
-                parser,
-                fallbackLocaleID,
-                fallbackFileExpression,
-              );
-
-              // Replace i18n call arguments
+              // add translation factory import
               const componentFileName = componentPath
                 .split('/')
                 .pop()!
                 .split('.')[0];
               const id = generateID(componentFileName);
-              const chunkName = getChunkName(id);
-              const translationFactoryName = 'translationFactory';
+              const translationFactoryName = `__webpack__i18n__${generateID(
+                'translationFactory',
+              )}`;
 
-              ParserHelpers.toConstantDependency(
-                parser,
-                i18nCallArguments({
-                  id,
-                  translationFactoryName,
-                  fallbackLocale: this.options.fallbackLocale,
-                  fallbackLocaleID,
-                  translationFiles,
-                }),
-              )(expression);
-
-              // add translation function import
               const factoryPath = path.join(
                 componentDir,
                 TRANSLATION_DIRECTORY_NAME,
                 'translationFactory.js',
               );
-              const factorySource = buildFactorySource(chunkName);
-              virtualModules.writeModule(factoryPath, factorySource);
+              const factorySource = buildFactorySource(`${id}-i18n`);
+              this.virtualModules.writeModule(factoryPath, factorySource);
 
               const asyncTranslationFactoryExpression = ParserHelpers.requireFileAsExpression(
                 parser.state.module.context,
@@ -170,6 +150,20 @@ export class ReactI18nPlugin {
                 translationFactoryName,
                 asyncTranslationFactoryExpression,
               );
+
+              // Replace i18n call arguments
+              expressions.map(expression => {
+                ParserHelpers.toConstantDependency(
+                  parser,
+                  i18nCallArguments({
+                    id,
+                    translationFactoryName,
+                    fallbackLocale: this.options.fallbackLocale,
+                    fallbackLocaleID,
+                    translationFiles,
+                  }),
+                )(expression);
+              });
             });
         };
 
@@ -189,25 +183,20 @@ export class ReactI18nPlugin {
   }
 }
 
-// Return a list of translationFiles name	function i18nCallExpression(
+// Return a list of translationFiles name
 function getTranslationFiles(parser: any): string[] {
   const componentDirectory = parser.state.module.context;
   const translationsDirectoryPath = `${componentDirectory}/${TRANSLATION_DIRECTORY_NAME}`;
 
-  let translationFiles: string[] = [];
   try {
-    translationFiles = parser.state.compilation.compiler.inputFileSystem.readdirSync(
+    return parser.state.compilation.compiler.inputFileSystem.readdirSync(
       translationsDirectoryPath,
     );
   } catch (error) {
     // do nothing if the directory does not exist
   }
 
-  return translationFiles;
-}
-
-function getChunkName(id: string) {
-  return `${id}-i18n`;
+  return [];
 }
 
 function i18nCallArguments({
@@ -220,7 +209,7 @@ function i18nCallArguments({
   id: string;
   translationFactoryName: string;
   fallbackLocale: string;
-  fallbackLocaleID: string;
+  fallbackLocaleID?: string;
   translationFiles: string[];
 }): string {
   const translations = translationFiles
@@ -237,28 +226,24 @@ function i18nCallArguments({
 
   return `({
     id: '${id}',
-    fallback: ${fallbackLocaleID},
-    translations(locale) {
+    ${fallbackLocaleID ? `fallback: ${fallbackLocaleID},` : ''}
+    async translations(locale) {
       const translations = [${translations}];
-
       if (translations.indexOf(locale) < 0) {
         return;
       }
-
-      return ${translationFactoryName}(locale);
+      return await ${translationFactoryName}(locale);
     },
   })`;
 }
 
 function buildFactorySource(chunkName: string) {
   return `
-    function translationFactory(locale) {
-      return async () => {
-        const dictionary = await import(
-          /* webpackChunkName: "${chunkName}", webpackMode: "lazy-once" */
-          \`./$\{locale}.json\`
-        );
-        return dictionary && dictionary.default;
-      }
+    export default async function translationFactory(locale) {
+      const dictionary = await import(
+        /* webpackChunkName: "${chunkName}", webpackMode: "lazy-once" */
+        \`./$\{locale}.json\`
+      );
+      return dictionary && dictionary.default;
     }`;
 }

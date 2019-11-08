@@ -24,19 +24,19 @@
   },
   "homepage": "https://github.com/Shopify/quilt/blob/master/packages/react-i18n-webpack-plugin/README.md",
   "dependencies": {
+    "@types/webpack": "^4.0.0",
     "change-case": "^3.1.0",
     "string-hash": "^1.1.3",
-    "webpack-virtual-modules": "^0.2.0"
+    "webpack-virtual-modules": "^0.1.12"
   },
   "files": [
     "dist/*"
   ],
-  "peerDependencies": {
-    "webpack": "~4.41.0"
-  },
   "devDependencies": {
     "@types/estree": "^0.0.39",
-    "@types/webpack": "^4.0.0",
     "@types/webpack-virtual-modules": "^0.1.0"
+  },
+  "optionalDependencies": {
+    "webpack": "^4.40.0"
   }
 }
