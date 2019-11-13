@@ -20,6 +20,8 @@ matrix:
         - yarn test --testPathPattern react-server-webpack-plugin address
       cache:
         directories:
+          - packages/address-consts/tsconfig.tsbuildinfo
+          - packages/with-env/tsconfig.tsbuildinfo
           - packages/**/*tsbuildinfo
     - <<: *node_container
       name: 'Node - unit tests'
